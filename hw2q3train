@@ -104,7 +104,7 @@ def test(dataloader, model, loss_fn):
 
 
 #Main training loop
-for epoch in range(100):
+for epoch in range(1):
     print(f"Epoch {epoch+1}, lr={optimizer.param_groups[0]['lr']}")
     train(trainloader, model, loss_fn, optimizer)
     test(testloader, model, loss_fn)
@@ -113,9 +113,13 @@ print("Done!")
 
 
 #Saving the model
-torch.save(model.state_dict(), "allcnn_cifar10.pth")
-print("Saved PyTorch Model State to allcnn_cifar10.pth")
-
+#torch.save(model.state_dict(), "allcnn_cifar10.pth")
+#print("Saved PyTorch Model State to allcnn_cifar10.pth")
+import os
+output_dir = "/content/drive/MyDrive/ESE5460_HW2_outputs/"
+os.makedirs(output_dir, exist_ok=True)
+torch.save(model.state_dict(), os.path.join(output_dir, "allcnn_cifar10.pth"))
+print("Saved model to Google Drive!")
 
 
 
