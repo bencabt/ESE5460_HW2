@@ -205,7 +205,7 @@ for epoch in range(epochs):
         result_plot.append({
             'step': iter[0],
             'loss': val_loss,
-            'accuracy': val_error
+            'error': val_error
         })
         print(f"Validation reported for step {iter[0]}.")
 print("TRAINING COMPLETE.")
