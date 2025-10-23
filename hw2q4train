@@ -294,8 +294,13 @@ def generate_text(model, start_char='A', max_length=400):
     return generated_text
 
 # Generate sample text
-sampled_text = generate_text(model, start_char='T', max_length=400)
 
+print("\n--- Example of Generated Text ---")
+
+# Call the function and assign the returned string to a variable
+output_string = generate_text(model, start_char='T', max_length=400) 
+# Print the resulting string
+print(output_string)
 
 
 
