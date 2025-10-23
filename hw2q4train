@@ -28,6 +28,9 @@ response3 = requests.get(text3URL)
 # Get text content as strings
 text = response1.text + " " + response2.text + " " + response3.text
 
+#truncate text
+text = text[:5000000]
+
 #Get number of unique characters
 all_chars = sorted(list(set(text)))
 m = len(all_chars)
