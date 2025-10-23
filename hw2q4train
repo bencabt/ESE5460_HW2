@@ -11,6 +11,8 @@ import requests
 import numpy as np
 from torch.utils.data import TensorDataset, DataLoader
 import matplotlib.pyplot as plt
+import os
+
 
 
 
@@ -216,6 +218,7 @@ print("TRAINING COMPLETE.")
 # --- SAVE PLOTTING DATA TO JSON (NEW BLOCK) ---
 import json
 from datetime import datetime # Already imported, but safe to keep nearby for context
+import os # <--- ADD THIS REDUNDANT IMPORT HERE
 
 output_dir = "/content/drive/MyDrive/ESE5460_HW2_outputs/"
 # Create a unique filename for the results data
