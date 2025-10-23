@@ -1,0 +1,296 @@
+# train.py
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torchvision import datasets, transforms
+from allcnn import allcnn_t
+from torchvision.transforms import ToTensor
+import torch.optim as optim
+from datetime import datetime
+import requests
+import numpy as np
+from torch.utils.data import TensorDataset, DataLoader
+import matplotlib.pyplot as plt
+import os
+
+MODEL_SAVE_PATH = "/.Documents/ESE5460/HW2/allcnn_cifar10_20251022_195204.pth"
+
+#Text URLs
+text1URL = "https://www.gutenberg.org/cache/epub/100/pg100.txt"
+text2URL = "https://www.gutenberg.org/cache/epub/2600/pg2600.txt"
+text3URL = "https://www.gutenberg.org/cache/epub/77109/pg77109.txt"
+
+# Download texts
+response1 = requests.get(text1URL)
+response2 = requests.get(text2URL)
+response3 = requests.get(text3URL)
+
+# Get text content as strings
+text = response1.text + " " + response2.text + " " + response3.text
+
+#truncate text
+text = text[:5000000]
+
+#Get number of unique characters
+all_chars = sorted(list(set(text)))
+m = len(all_chars)
+print(f"Number of unique characters: {m}")
+print(enumerate(all_chars))
+
+#character index mapping
+char_to_idx = {ch: i for i, ch in enumerate(all_chars)}
+idx_to_char = {i: ch for i, ch in enumerate(all_chars)}
+
+#Create tensor
+def text_to_tensor(text, seq_len=33):
+    sequences = []
+    for i in range(0, len(text) - seq_len, seq_len):
+        seq = text[i:i+seq_len]
+        one_hot = np.zeros((seq_len, m), dtype=np.float32)
+        for t, ch in enumerate(seq):
+            one_hot[t, char_to_idx[ch]] = 1.0
+        sequences.append(one_hot)
+    full_sequence = np.stack(sequences)
+    modified_sequence = full_sequence[1:-1]
+    return modified_sequence
+
+#shuffle data
+def shuffle_data(sequence, seed=123):
+    np.random.seed(seed)
+    indices = np.arange(len(sequence))
+    np.random.shuffle(indices)
+    return sequence[indices]
+
+#train test split
+def train_val_split(data, val_fraction=0.2):
+    val_size = int(len(data) * val_fraction)
+    train_data = data[:-val_size]
+    val_data = data[-val_size:]
+    return train_data, val_data
+
+#split x and y, where y is next character, y is flattened indices
+def xy_split(data):
+    X = data[:, :-1, :]
+    y = data[:, 1:, :]
+    y_flat = np.argmax(y, axis=2)
+    return X, y_flat
+
+#Prepare data
+shuffled_data = shuffle_data(text_to_tensor(text, seq_len=33))
+train_data, val_data = train_val_split(shuffled_data, val_fraction=0.2)
+
+#Split data
+train_X, train_y = xy_split(train_data)
+val_X, val_y = xy_split(val_data)
+
+#Create tensor
+train_X_tensor = torch.tensor(train_X, dtype=torch.float32)
+train_Y_tensor = torch.tensor(train_y, dtype=torch.long) # Use torch.long for indices
+val_X_tensor = torch.tensor(val_X, dtype=torch.float32)
+val_Y_tensor = torch.tensor(val_y, dtype=torch.long)     # Use torch.long for indices
+
+#Create Datasets
+train_dataset = TensorDataset(train_X_tensor, train_Y_tensor) 
+val_dataset = TensorDataset(val_X_tensor, val_Y_tensor)
+
+#Create DataLoaders
+batch_size = 64
+trainloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+testloader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+
+#Set up device
+device = "cuda" if torch.cuda.is_available() else "cpu"
+print(f"Using {device} device")
+
+#Define RNN model
+class CharRNN(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size):
+        super(CharRNN, self).__init__()
+        self.rnn = nn.RNN(input_size, hidden_size, batch_first=True)
+        self.fc = nn.Linear(hidden_size, output_size)
+
+    #this is a 32 sequence task
+    def forward(self, x):
+        out, _ = self.rnn(x)
+        out_flat = out.reshape(-1, out.shape[2])
+        logits_flat = self.fc(out_flat)
+        logits = logits_flat.reshape(out.shape[0], out.shape[1], logits_flat.shape[1])
+        return logits
+
+#training
+def train(dataloader, model, loss_fn, optimizer, iter):
+    size = len(dataloader.dataset)
+    model.train() #set model to training mode
+
+    #training loop
+    for batch, (X, y) in enumerate(dataloader):
+        X, y = X.to(device), y.to(device)
+
+        #Compute prediction and loss
+        pred = model(X)
+        #flatten for loss calc
+        pred_flat = pred.reshape(-1, pred.shape[2])
+        y_flat = y.reshape(-1)
+        #loss
+        loss = loss_fn(pred_flat, y_flat)
+
+        #Backprop
+        optimizer.zero_grad() #zero gradients
+        loss.backward() #calculate gradients
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
+        optimizer.step() #update weights
+
+        iter[0] += 1 #iter global step
+
+        if batch % 100 == 0: #print out loss every 100 batches
+            loss, current = loss.item(), batch * len(X)
+            print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
+
+#Validation
+def test(dataloader, model, loss_fn):
+    total_characters = len(dataloader.dataset) * dataloader.dataset.tensors[0].shape[1] #sequence * 32
+    num_batches = len(dataloader)
+    model.eval() #set model to evaluation mode
+    test_loss, correct = 0, 0
+
+    with torch.no_grad(): #no need to track gradients
+        for X, y in dataloader:
+            X, y = X.to(device), y.to(device)
+            pred = model(X)
+            pred_flat = pred.reshape(-1, pred.shape[2])
+            y_flat = y.reshape(-1)
+            #loss
+            test_loss += loss_fn(pred_flat, y_flat).item()
+            #accuracy
+            correct += (pred_flat.argmax(1) == y_flat).type(torch.float).sum().item()
+
+    test_loss /= num_batches
+    correct /= total_characters
+    print(f"Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
+
+    return test_loss, correct
+
+#Set up model
+hidden_size = 128
+learning_rate = 1e-3
+epochs = 40
+model = CharRNN(input_size=m, hidden_size=hidden_size, output_size=m).to(device)
+print(model)
+
+#Loss function and optimizer
+loss_fn = nn.CrossEntropyLoss()
+optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+
+iter = [0] #global step (for plot)
+result_plot = []
+
+
+# If the file is not found, commence training
+print("No existing weights found. COMMENCING TRAINING...")
+for epoch in range(epochs):
+    print(f"Epoch {epoch+1}\n-------------------------------")
+    train(trainloader, model, loss_fn, optimizer, iter)
+    
+    ##Used the internet for support with this validation logging
+    while (iter[0] // 1000) > (len(result_plot)):
+        
+        print(f"\n--- Validation at Step {iter[0]} ---")
+        
+        # Run validation and get the loss/accuracy metrics
+        val_loss, val_acc = test(testloader, model, loss_fn) 
+        val_error = 1.0 - val_acc
+
+        # Store the results
+        result_plot.append({
+            'step': iter[0],
+            'loss': val_loss,
+            'error': val_error
+        })
+        print(f"Validation reported for step {iter[0]}.")
+print("TRAINING COMPLETE.")
+
+
+
+##Code given by copilot to save results to Google Drive
+import json
+from datetime import datetime 
+import os 
+
+output_dir = "/content/drive/MyDrive/ESE5460_HW2_outputs/"
+# Create a unique filename for the results data
+plot_filename = f"rnn_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+plot_filepath = os.path.join(output_dir, plot_filename)
+
+with open(plot_filepath, 'w') as f:
+    json.dump(result_plot, f)
+print(f"Saved plot data to Google Drive at: {plot_filepath}")
+
+#Saving the model
+#torch.save(model.state_dict(), "allcnn_cifar10.pth")
+#print("Saved PyTorch Model State to allcnn_cifar10.pth")
+import os
+output_dir = "/content/drive/MyDrive/ESE5460_HW2_outputs/"
+os.makedirs(output_dir, exist_ok=True)
+filename = f"allcnn_cifar10_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pth"
+torch.save(model.state_dict(), os.path.join(output_dir, filename))
+print("Saved model to Google Drive!")
+
+
+###Sampling from the model
+# Sample from a category and starting letter
+#Code structure adapted from PyTorch RNN tutorial
+import torch.nn.functional as F
+
+def generate_text(model, start_char='A', max_length=400):
+    model.eval()
+    hidden = None 
+    
+    #Shape: [1, 1, m]
+    seq_len = 1 
+    start_idx = char_to_idx.get(start_char, 0) 
+    
+    # one hot input tensor
+    input_tensor = torch.zeros(1, seq_len, m).to(device)
+    input_tensor[0, 0, start_idx] = 1.0
+    
+    #text 
+    generated_text = start_char
+    
+    with torch.no_grad():
+        for i in range(max_length):
+            #forward pass
+            rnn_output, hidden = model.rnn(input_tensor, hidden)
+            
+            # output through final layer
+            logits = model.fc(rnn_output.squeeze(1)) # logits shape: [1, m]
+            
+            # logits to probabilities
+            probabilities = F.softmax(logits, dim=1) 
+            
+            # next char
+            predicted_idx = torch.multinomial(probabilities, 1).item() 
+
+            #next char and update input
+            next_char = idx_to_char[predicted_idx]
+            generated_text += next_char
+            
+            # fix encoding
+            input_tensor.zero_()
+            input_tensor[0, 0, predicted_idx] = 1.0
+    return generated_text
+
+# Generate text
+print("\n--- Example of Generated Text ---")
+
+# Text function call
+output_string = generate_text(model, start_char='T', max_length=400) 
+print(output_string)
+
+
+
+"""
+Things to review: 
+Shaping / comparing of x and y in the RNN model
+33 split
+plotting of results
+"""

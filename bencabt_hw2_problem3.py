@@ -1,0 +1,142 @@
+# train.py
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torchvision import datasets, transforms
+from allcnn import allcnn_t
+from torchvision.transforms import ToTensor
+import torch.optim as optim
+from datetime import datetime
+import os
+
+#Key thinkgs to implement:
+#Optimizer: 
+# 1. LR .1 for first 40 epochs, .01 for next 40, .001 for last 20
+# 2. SGD with momentum .9, weight decay 1e-3
+#
+# Transforms:
+# 3. Data augmentation: mirror flips, cropping, and padding
+# 
+# Training
+# 4. Dropout and batch-norm
+
+MODEL_SAVE_PATH = "/.Documents/ESE5460/HW2/allcnn_cifar10_20251022_195204.pth"
+
+# Data loaders
+# Customize data as it comes in 
+train_transform = transforms.Compose([
+    transforms.RandomCrop(32, padding=4),
+    transforms.RandomHorizontalFlip(),
+    transforms.ToTensor(),
+    transforms.Normalize((0.4914, 0.4822, 0.4465),
+                         (0.2470, 0.2435, 0.2616))])
+
+test_transform = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize((0.4914, 0.4822, 0.4465),
+                         (0.2470, 0.2435, 0.2616))])
+
+#Download and prepare CIFAR-10 dataset
+training_data = datasets.CIFAR10(root='./data', train=True, download=True, transform=train_transform)
+test_data = datasets.CIFAR10(root='./data', train=False, download=True, transform=test_transform)
+
+batch_size = 128
+trainloader = torch.utils.data.DataLoader(training_data, batch_size=batch_size, shuffle=True)
+testloader = torch.utils.data.DataLoader(test_data, batch_size=batch_size, shuffle=False)
+
+#Check data shapes
+for X,y in trainloader:
+    #Batch, channels, height, width
+    print(f"Shape of X [N, C, H, W]: {X.shape}")
+    X.permute(0,2,3,1)
+    print(f"Shape of y: {y.shape} {y.dtype}")
+    break
+
+#Set up device
+device = "cuda" if torch.cuda.is_available() else "cpu"
+print(f"Using {device} device")
+
+#Set up model
+model = allcnn_t().to(device)
+print(model)
+
+#Loss function and optimizer
+loss_fn = nn.CrossEntropyLoss()
+optimizer = torch.optim.SGD(model.parameters(), lr=.1, momentum=.9, weight_decay=1e-3)
+scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[40, 80], gamma=0.1) #assist w/ LR changes
+
+#Training
+def train(dataloader, model, loss_fn, optimizer):
+    size = len(dataloader.dataset)
+    model.train() #set model to training mode
+
+    #training loop
+    for batch, (X, y) in enumerate(dataloader):
+        X, y = X.to(device), y.to(device)
+
+        #Compute prediction and loss
+        pred = model(X)
+        loss = loss_fn(pred, y)
+
+        #Backpropagation
+        optimizer.zero_grad() #zero gradients
+        loss.backward() #calculate gradients
+        #grad clipped sourced from internet
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
+        optimizer.step() #update weights
+        iter[0] += 1 #iter global step
+
+        if batch % 100 == 0: #print out loss every 100 batches
+            loss, current = loss.item(), batch * len(X)
+            #print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
+
+#Validation
+def test(dataloader, model, loss_fn):
+    size = len(dataloader.dataset)
+    num_batches = len(dataloader)
+    model.eval() #set model to evaluation mode
+    test_loss, correct = 0, 0
+
+    with torch.no_grad(): #no need to track gradients
+        for X, y in dataloader:
+            X, y = X.to(device), y.to(device)
+            pred = model(X)
+            test_loss += loss_fn(pred, y).item()
+            correct += (pred.argmax(1) == y).type(torch.float).sum().item()
+
+    test_loss /= num_batches
+    correct /= size
+    print(f"Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
+
+# Check if the model file already exists
+if os.path.exists(MODEL_SAVE_PATH):
+    print(f"Weights found at {MODEL_SAVE_PATH}. Skipping training loop.")
+    
+    # Load the trained model state
+    model.load_state_dict(torch.load(MODEL_SAVE_PATH, map_location=device))
+    
+    # Set to evaluation mode for Problem 3(b) calculations
+    model.eval()
+
+else:
+    # If the file is not found, commence training
+    print("No existing weights found. COMMENCING TRAINING...")
+    
+    #Main training loop
+    for epoch in range(100):
+        print(f"Epoch {epoch+1}, lr={optimizer.param_groups[0]['lr']}")
+        train(trainloader, model, loss_fn, optimizer)
+        test(testloader, model, loss_fn)
+        scheduler.step()
+    print("Done!")
+
+    #Saving the model
+    #torch.save(model.state_dict(), "allcnn_cifar10.pth")
+    #print("Saved PyTorch Model State to allcnn_cifar10.pth")
+    output_dir = "/content/drive/MyDrive/ESE5460_HW2_outputs/"
+    os.makedirs(output_dir, exist_ok=True)
+    filename = f"allcnn_cifar10_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pth"
+    torch.save(model.state_dict(), os.path.join(output_dir, filename))
+    print("Saved model to Google Drive!")
+
+

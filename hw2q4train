@@ -13,12 +13,6 @@ from torch.utils.data import TensorDataset, DataLoader
 import matplotlib.pyplot as plt
 import os
 
-
-
-
-
-
-
 #Text URLs
 text1URL = "https://www.gutenberg.org/cache/epub/100/pg100.txt"
 text2URL = "https://www.gutenberg.org/cache/epub/2600/pg2600.txt"
@@ -97,7 +91,6 @@ val_Y_tensor = torch.tensor(val_y, dtype=torch.long)     # Use torch.long for in
 train_dataset = TensorDataset(train_X_tensor, train_Y_tensor) 
 val_dataset = TensorDataset(val_X_tensor, val_Y_tensor)
 
-
 #Create DataLoaders
 batch_size = 64
 trainloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
@@ -136,10 +129,10 @@ def train(dataloader, model, loss_fn, optimizer, iter):
         #flatten for loss calc
         pred_flat = pred.reshape(-1, pred.shape[2])
         y_flat = y.reshape(-1)
-        
+        #loss
         loss = loss_fn(pred_flat, y_flat)
 
-        #Backpropagation
+        #Backprop
         optimizer.zero_grad() #zero gradients
         loss.backward() #calculate gradients
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
@@ -175,7 +168,6 @@ def test(dataloader, model, loss_fn):
 
     return test_loss, correct
 
-
 #Set up model
 hidden_size = 128
 learning_rate = 1e-3
@@ -187,11 +179,12 @@ print(model)
 loss_fn = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
-iter = [0] #global step
+iter = [0] #global step (for plot)
 result_plot = []
 
-#Training loop
-print("COMMENCING TRAINING...\n")
+
+# If the file is not found, commence training
+print("No existing weights found. COMMENCING TRAINING...")
 for epoch in range(epochs):
     print(f"Epoch {epoch+1}\n-------------------------------")
     train(trainloader, model, loss_fn, optimizer, iter)
@@ -215,11 +208,11 @@ for epoch in range(epochs):
 print("TRAINING COMPLETE.")
 
 
-# --- SAVE PLOTTING DATA TO JSON (NEW BLOCK) ---
+
 ##Code given by copilot to save results to Google Drive
 import json
-from datetime import datetime # Already imported, but safe to keep nearby for context
-import os # <--- ADD THIS REDUNDANT IMPORT HERE
+from datetime import datetime 
+import os 
 
 output_dir = "/content/drive/MyDrive/ESE5460_HW2_outputs/"
 # Create a unique filename for the results data
@@ -228,9 +221,7 @@ plot_filepath = os.path.join(output_dir, plot_filename)
 
 with open(plot_filepath, 'w') as f:
     json.dump(result_plot, f)
-
 print(f"Saved plot data to Google Drive at: {plot_filepath}")
-
 
 #Saving the model
 #torch.save(model.state_dict(), "allcnn_cifar10.pth")
@@ -250,60 +241,48 @@ import torch.nn.functional as F
 
 def generate_text(model, start_char='A', max_length=400):
     model.eval()
-    
-    # 1. Initialize hidden state to None (zero state)
-    # The 'hidden' will be passed back in the loop
     hidden = None 
     
-    # 2. Prepare the starting input (Shape: [1, 1, m])
+    #Shape: [1, 1, m]
     seq_len = 1 
-    start_idx = char_to_idx.get(start_char, 0) # Use .get for safety, default to index 0
+    start_idx = char_to_idx.get(start_char, 0) 
     
-    # Create the one-hot input tensor (Batch Size 1, Seq Len 1, Feature Size m)
+    # one hot input tensor
     input_tensor = torch.zeros(1, seq_len, m).to(device)
     input_tensor[0, 0, start_idx] = 1.0
-
+    
+    #text 
     generated_text = start_char
     
     with torch.no_grad():
         for i in range(max_length):
-            # 3. Forward Pass (using the raw components)
-            # Use the raw RNN layer to process the single step
+            #forward pass
             rnn_output, hidden = model.rnn(input_tensor, hidden)
             
-            # Pass the RNN output through the final linear layer
+            # output through final layer
             logits = model.fc(rnn_output.squeeze(1)) # logits shape: [1, m]
             
-            # Convert logits to a probability distribution
+            # logits to probabilities
             probabilities = F.softmax(logits, dim=1) 
             
-            # Sample the next character index using the probabilities
+            # next char
             predicted_idx = torch.multinomial(probabilities, 1).item() 
 
-            # 5. Get the character and prepare the next input
+            #next char and update input
             next_char = idx_to_char[predicted_idx]
             generated_text += next_char
             
-            # Re-encode the sampled character for the next iteration
+            # fix encoding
             input_tensor.zero_()
             input_tensor[0, 0, predicted_idx] = 1.0
-            
-            # OPTIONAL: Break if a specific character (e.g., a newline) is generated
-            # if next_char == '\n': break
-
     return generated_text
 
-# Generate sample text
-
+# Generate text
 print("\n--- Example of Generated Text ---")
 
-# Call the function and assign the returned string to a variable
+# Text function call
 output_string = generate_text(model, start_char='T', max_length=400) 
-# Print the resulting string
 print(output_string)
-
-
-
 
 
 
