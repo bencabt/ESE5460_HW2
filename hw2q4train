@@ -29,7 +29,7 @@ response3 = requests.get(text3URL)
 text = response1.text + " " + response2.text + " " + response3.text
 
 #truncate text
-text = text[:5000000]
+text = text[:50000000]
 
 #Get number of unique characters
 all_chars = sorted(list(set(text)))
@@ -199,12 +199,13 @@ for epoch in range(epochs):
         
         # Run validation and get the loss/accuracy metrics
         val_loss, val_acc = test(testloader, model, loss_fn) 
-        
+        val_error = 1.0 - val_acc
+
         # Store the results
         result_plot.append({
             'step': iter[0],
             'loss': val_loss,
-            'accuracy': 1.0 - val_acc
+            'accuracy': val_error
         })
         print(f"Validation reported for step {iter[0]}.")
 print("TRAINING COMPLETE.")
