@@ -29,7 +29,7 @@ response3 = requests.get(text3URL)
 text = response1.text + " " + response2.text + " " + response3.text
 
 #truncate text
-text = text[:10000000]
+text = text[:5000000]
 
 #Get number of unique characters
 all_chars = sorted(list(set(text)))
