@@ -163,7 +163,7 @@ def test(dataloader, model, loss_fn):
             #loss
             test_loss += loss_fn(pred_flat, y_flat).item()
             #accuracy
-            correct += (pred.argmax(1) == y_flat).type(torch.float).sum().item()
+            correct += (pred_flat.argmax(1) == y_flat).type(torch.float).sum().item()
 
     test_loss /= num_batches
     correct /= total_characters
