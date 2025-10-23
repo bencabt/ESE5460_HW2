@@ -92,7 +92,7 @@ val_dataset = TensorDataset(val_X_tensor, val_Y_tensor)
 
 
 #Create DataLoaders
-batch_size = 128
+batch_size = 32
 trainloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 testloader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
@@ -249,3 +249,11 @@ os.makedirs(output_dir, exist_ok=True)
 filename = f"allcnn_cifar10_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pth"
 torch.save(model.state_dict(), os.path.join(output_dir, filename))
 print("Saved model to Google Drive!")
+
+
+"""
+Things to review: 
+Shaping / comparing of x and y in the RNN model
+33 split
+plotting of results
+"""
