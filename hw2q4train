@@ -179,7 +179,7 @@ def test(dataloader, model, loss_fn):
 #Set up model
 hidden_size = 128
 learning_rate = 1e-3
-epochs = 20
+epochs = 40
 model = CharRNN(input_size=m, hidden_size=hidden_size, output_size=m).to(device)
 print(model)
 
