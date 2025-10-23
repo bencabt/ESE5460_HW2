@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 
 
 
+
 #Text URLs
 text1URL = "https://www.gutenberg.org/cache/epub/100/pg100.txt"
 text2URL = "https://www.gutenberg.org/cache/epub/2600/pg2600.txt"
@@ -211,8 +212,26 @@ for epoch in range(epochs):
         print(f"Validation reported for step {iter[0]}.")
 print("TRAINING COMPLETE.")
 
+##COPY PLOT CODE
+# --- SAVE PLOTTING DATA TO JSON (NEW BLOCK) ---
+import json
+from datetime import datetime # Already imported, but safe to keep nearby for context
+
+output_dir = "/content/drive/MyDrive/ESE5460_HW2_outputs/"
+# Create a unique filename for the results data
+plot_filename = f"rnn_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+plot_filepath = os.path.join(output_dir, plot_filename)
+
+with open(plot_filepath, 'w') as f:
+    json.dump(result_plot, f)
+
+print(f"Saved plot data to Google Drive at: {plot_filepath}")
 
 
+
+
+
+"""
 # --- PLOTTING LOGIC ---
 # Plot logic written with assistance from copilot
 # 1. Extract data from the result_plot list
@@ -244,6 +263,8 @@ plt.tight_layout()
 
 # 3. Display the plots
 plt.show()
+"""
+
 
 #Saving the model
 #torch.save(model.state_dict(), "allcnn_cifar10.pth")
