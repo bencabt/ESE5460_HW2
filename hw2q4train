@@ -99,7 +99,7 @@ val_dataset = TensorDataset(val_X_tensor, val_Y_tensor)
 
 
 #Create DataLoaders
-batch_size = 32
+batch_size = 64
 trainloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 testloader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
@@ -179,7 +179,7 @@ def test(dataloader, model, loss_fn):
 #Set up model
 hidden_size = 128
 learning_rate = 1e-3
-epochs = 10
+epochs = 20
 model = CharRNN(input_size=m, hidden_size=hidden_size, output_size=m).to(device)
 print(model)
 
