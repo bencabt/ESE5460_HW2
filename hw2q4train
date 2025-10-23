@@ -214,8 +214,9 @@ for epoch in range(epochs):
         print(f"Validation reported for step {iter[0]}.")
 print("TRAINING COMPLETE.")
 
-##COPY PLOT CODE
+
 # --- SAVE PLOTTING DATA TO JSON (NEW BLOCK) ---
+##Code given by copilot to save results to Google Drive
 import json
 from datetime import datetime # Already imported, but safe to keep nearby for context
 import os # <--- ADD THIS REDUNDANT IMPORT HERE
@@ -231,44 +232,6 @@ with open(plot_filepath, 'w') as f:
 print(f"Saved plot data to Google Drive at: {plot_filepath}")
 
 
-
-
-
-"""
-# --- PLOTTING LOGIC ---
-# Plot logic written with assistance from copilot
-# 1. Extract data from the result_plot list
-steps = [d['step'] for d in result_plot]
-losses = [d['loss'] for d in result_plot]
-errors = [d['error'] for d in result_plot] # This assumes you fixed the loop to store 'error'
-
-# 2. Create the plots
-plt.figure(figsize=(10, 5))
-
-# Plot 1: Validation Loss vs. Weight Updates
-plt.subplot(1, 2, 1) # 1 row, 2 columns, 1st plot
-plt.plot(steps, losses, marker='o', linestyle='-', color='b')
-plt.title('Validation Loss vs. Weight Updates')
-plt.xlabel('Weight Updates (Global Step)')
-plt.ylabel('Average Cross-Entropy Loss')
-plt.grid(True)
-
-# Plot 2: Validation Error vs. Weight Updates
-plt.subplot(1, 2, 2) # 1 row, 2 columns, 2nd plot
-plt.plot(steps, errors, marker='o', linestyle='-', color='r')
-plt.title('Validation Error vs. Weight Updates')
-plt.xlabel('Weight Updates (Global Step)')
-plt.ylabel('Error Rate (1 - Accuracy)')
-plt.grid(True)
-
-# Adjust layout to prevent overlap
-plt.tight_layout() 
-
-# 3. Display the plots
-plt.show()
-"""
-
-
 #Saving the model
 #torch.save(model.state_dict(), "allcnn_cifar10.pth")
 #print("Saved PyTorch Model State to allcnn_cifar10.pth")
@@ -278,6 +241,65 @@ os.makedirs(output_dir, exist_ok=True)
 filename = f"allcnn_cifar10_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pth"
 torch.save(model.state_dict(), os.path.join(output_dir, filename))
 print("Saved model to Google Drive!")
+
+
+###Sampling from the model
+# Sample from a category and starting letter
+#Code structure adapted from PyTorch RNN tutorial
+import torch.nn.functional as F
+
+def generate_text(model, start_char='A', max_length=400):
+    model.eval()
+    
+    # 1. Initialize hidden state to None (zero state)
+    # The 'hidden' will be passed back in the loop
+    hidden = None 
+    
+    # 2. Prepare the starting input (Shape: [1, 1, m])
+    seq_len = 1 
+    start_idx = char_to_idx.get(start_char, 0) # Use .get for safety, default to index 0
+    
+    # Create the one-hot input tensor (Batch Size 1, Seq Len 1, Feature Size m)
+    input_tensor = torch.zeros(1, seq_len, m).to(device)
+    input_tensor[0, 0, start_idx] = 1.0
+
+    generated_text = start_char
+    
+    with torch.no_grad():
+        for i in range(max_length):
+            # 3. Forward Pass (using the raw components)
+            # Use the raw RNN layer to process the single step
+            rnn_output, hidden = model.rnn(input_tensor, hidden)
+            
+            # Pass the RNN output through the final linear layer
+            logits = model.fc(rnn_output.squeeze(1)) # logits shape: [1, m]
+            
+            # Convert logits to a probability distribution
+            probabilities = F.softmax(logits, dim=1) 
+            
+            # Sample the next character index using the probabilities
+            predicted_idx = torch.multinomial(probabilities, 1).item() 
+
+            # 5. Get the character and prepare the next input
+            next_char = idx_to_char[predicted_idx]
+            generated_text += next_char
+            
+            # Re-encode the sampled character for the next iteration
+            input_tensor.zero_()
+            input_tensor[0, 0, predicted_idx] = 1.0
+            
+            # OPTIONAL: Break if a specific character (e.g., a newline) is generated
+            # if next_char == '\n': break
+
+    return generated_text
+
+# Generate sample text
+sampled_text = generate_text(model, start_char='T', max_length=400)
+
+
+
+
+
 
 
 """
