@@ -33,13 +33,13 @@ response3 = requests.get(text3URL)
 text = response1.text + " " + response2.text + " " + response3.text
 
 #truncate text
-#text = text[:5000000]
+text = text[:5000000]
 
 #Get number of unique characters
 all_chars = sorted(list(set(text)))
 m = len(all_chars)
 print(f"Number of unique characters: {m}")
-
+print(enumerate(all_chars))
 
 #character index mapping
 char_to_idx = {ch: i for i, ch in enumerate(all_chars)}
@@ -79,25 +79,8 @@ def xy_split(data):
     y_flat = np.argmax(y, axis=2)
     return X, y_flat
 
-###REMOVE TRUNCATE STEP
-chunk_size = 5000000 # 5 million characters
-all_shuffled_data_chunks = []
-
-for i in range(0, len(text), chunk_size):
-    chunk = text[i:i + chunk_size] #segment of text
-    chunk_data = text_to_tensor(chunk) #convert to tensor
-    
-    shuffled_chunk = shuffle_data(chunk_data, 123 + i) 
-    all_shuffled_data_chunks.append(shuffled_chunk)
-
-shuffled_data = np.concatenate(all_shuffled_data_chunks, axis=0) #combine
-print(f"Total sequences for training/validation: {len(shuffled_data)}")
-##
-
-
-
 #Prepare data
-#shuffled_data = shuffle_data(text_to_tensor(text, seq_len=33))
+shuffled_data = shuffle_data(text_to_tensor(text, seq_len=33))
 train_data, val_data = train_val_split(shuffled_data, val_fraction=0.2)
 
 #Split data
