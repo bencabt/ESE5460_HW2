@@ -250,3 +250,38 @@ plt.ylabel('Average Cross-Entropy Loss')
 plt.xticks(steps) # Ensure ticks are at 1, 2, 3, 4, 5
 plt.grid(True)
 plt.show() 
+
+
+###PART 3C###
+print("Clean set test accuracy:" + "-" * 20)
+test(testloader, model, loss_fn)
+
+#attack test
+X_perturbed_list = []
+y_labels_list = []
+for X, y in testloader: 
+    X, y = X.to(device), y.to(device)
+    X.requires_grad = True
+    output = model(X)
+    loss = loss_fn(output, y)
+    model.zero_grad()
+    loss.backward()
+    dx = X.grad.data.clone()
+    perturbation = eps * torch.sign(dx)
+    X_perturbed = X.data + perturbation
+    X_perturbed_list.append(X_perturbed.detach().cpu())
+    y_labels_list.append(y.detach().cpu())
+
+# Combine all batches into a single tensor
+X_perturbed = torch.cat(X_perturbed_list, dim=0)
+y_labels = torch.cat(y_labels_list, dim=0)
+
+#Create a new Dataset and DataLoader for the perturbed data
+perturbed_dataset = torch.utils.data.TensorDataset(X_perturbed, y_labels)
+perturbed_testloader = torch.utils.data.DataLoader(perturbed_dataset, batch_size=batch_size, shuffle=False)
+
+#test
+print("Perturbed set test accuracy:" + "-" * 20)
+test(perturbed_testloader, model, loss_fn)
+
+
