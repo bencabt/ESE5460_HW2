@@ -84,7 +84,6 @@ def train(dataloader, model, loss_fn, optimizer):
         #grad clipped sourced from internet
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
         optimizer.step() #update weights
-        iter[0] += 1 #iter global step
 
         if batch % 100 == 0: #print out loss every 100 batches
             loss, current = loss.item(), batch * len(X)

@@ -8,6 +8,7 @@ from torchvision.transforms import ToTensor
 import torch.optim as optim
 from datetime import datetime
 import os
+import numpy as np
 
 #Key thinkgs to implement:
 #Optimizer: 
@@ -20,7 +21,7 @@ import os
 # Training
 # 4. Dropout and batch-norm
 
-MODEL_SAVE_PATH = "/.Documents/ESE5460/HW2/allcnn_cifar10_20251022_195204.pth"
+MODEL_SAVE_PATH = "weights/allcnn_cifar10_20251022_195204.pth"
 
 # Data loaders
 # Customize data as it comes in 
@@ -84,7 +85,6 @@ def train(dataloader, model, loss_fn, optimizer):
         #grad clipped sourced from internet
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
         optimizer.step() #update weights
-        iter[0] += 1 #iter global step
 
         if batch % 100 == 0: #print out loss every 100 batches
             loss, current = loss.item(), batch * len(X)
@@ -139,4 +139,118 @@ else:
     torch.save(model.state_dict(), os.path.join(output_dir, filename))
     print("Saved model to Google Drive!")
 
+###PART 3(b) 1###
+#eval mode
+model.eval()
 
+# Get a batch of test data
+X, y = next(iter(testloader))
+X, y = X.to(device), y.to(device)
+X.requires_grad = True #enable gradient tracking on input
+
+output = model(X)  # Forward pass
+pred = output.argmax(dim=1)  # Index of the max log-probability
+
+# save correct and incorrect predictions
+correct_predictions = (pred == y).nonzero(as_tuple=True)[0]
+incorrect_predictions = (pred != y).nonzero(as_tuple=True)[0]
+
+#dx calculation
+loss = loss_fn(output, y)
+loss.backward()
+dx = X.grad.data.clone()
+
+
+CIFAR_MEAN = np.array([0.4914, 0.4822, 0.4465])
+CIFAR_STD = np.array([0.2023, 0.1994, 0.2010])
+
+#plotting dx for correct and incorrect predictions (first 3 of each), copilot supported plotting code
+import matplotlib.pyplot as plt
+def plot_image_and_gradient(X, dx, title, index):
+    # Convert tensors to NumPy and handle channels/plotting
+    X_np = X[index].detach().cpu().numpy().transpose(1, 2, 0) # C, H, W -> H, W, C
+    dx_np = dx[index].cpu().numpy().transpose(1, 2, 0)
+
+    X_denormalized = X_np * CIFAR_STD + CIFAR_MEAN
+    X_denormalized = np.clip(X_denormalized, 0, 1)
+    
+    # Simple visualization: use the maximum absolute value across all channels
+    dx_plot = np.max(np.abs(dx_np), axis=2) 
+    
+    fig, axes = plt.subplots(1, 2, figsize=(8, 4))
+    fig.suptitle(title)
+
+    # Plot Original Image
+    axes[0].imshow(X_denormalized) # De-normalize CIFAR-10 image for viewing
+    axes[0].set_title(f"Original:")
+    axes[0].axis('off')
+    
+    # Plot Gradient (dx)
+    # The gradient is the visualization of what direction in pixel space increases the loss.
+    axes[1].imshow(dx_plot, cmap='viridis') 
+    axes[1].set_title("Max Gradient (|dx|)")
+    axes[1].axis('off')
+
+    plt.show()
+
+#PLOTTING
+correct_idx = correct_predictions[0].item()
+plot_image_and_gradient(X, dx, "Correctly Classified Sample", correct_idx)
+
+incorrect_idx = incorrect_predictions[0].item()
+plot_image_and_gradient(X, dx, "Incorrectly Classified Sample", incorrect_idx)
+
+correct_idx = correct_predictions[1].item()
+plot_image_and_gradient(X, dx, "Correctly Classified Sample", correct_idx)
+
+incorrect_idx = incorrect_predictions[1].item()
+plot_image_and_gradient(X, dx, "Incorrectly Classified Sample", incorrect_idx)
+
+
+###PART 3(b) 2###
+# Get a batch of test data
+X, y = next(iter(testloader))
+X, y = X.to(device), y.to(device)
+X.requires_grad = True #enable gradient tracking on input
+
+eps = 8.0 / 255.0  # Example step size
+mini_batch_step_losses = torch.zeros(5)
+total_images_processed = 0
+
+for x,y in zip(X, y):
+    x = x.unsqueeze(0).clone().detach() #was not previously doing this, internet said to detach to avoid in-place errors
+    y = y.unsqueeze(0)
+    x.requires_grad = True
+    for k in range(5):
+        if x.grad is not None:
+            x.grad.zero_()
+        # forward propagate x through the network # backprop the loss
+        output = model(x)
+        loss = loss_fn(output, y)
+        loss.backward()
+        #  extract signed gradient
+        dx = x.grad.data.clone()
+        # perturb the image
+        perturbation = eps * torch.sign(dx)
+        x.data.add_(perturbation) # recommended via internet, previously had in place update
+        
+        with torch.no_grad():
+            ell = loss_fn(model(x), y)
+            
+        mini_batch_step_losses[k] += ell.item()
+
+avg_step_losses = mini_batch_step_losses / total_images_processed
+# Plot the loss on the perturbed images as a function of the number of steps 
+# Move to CPU for NumPy/Matplotlib plotting
+avg_step_losses_np = avg_step_losses.cpu().numpy()
+steps = np.arange(1, 6) # Steps 1 through 5
+
+plt.figure(figsize=(7, 5))
+plt.plot(steps, avg_step_losses_np, marker='o', linestyle='-', color='red')
+
+plt.title(f'{total_images_processed}-Image Avg Loss vs. Perturbation Steps')
+plt.xlabel('Number of Perturbation Steps (k)')
+plt.ylabel('Average Cross-Entropy Loss')
+plt.xticks(steps) # Ensure ticks are at 1, 2, 3, 4, 5
+plt.grid(True)
+plt.show() 
