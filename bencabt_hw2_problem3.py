@@ -208,13 +208,8 @@ plot_image_and_gradient(X, dx, "Incorrectly Classified Sample", incorrect_idx)
 
 
 ###PART 3(b) 2###
-# Get a batch of test data
-X, y = next(iter(testloader))
-X, y = X.to(device), y.to(device)
-X.requires_grad = True #enable gradient tracking on input
-
 eps = 8.0 / 255.0  # Example step size
-mini_batch_step_losses = torch.zeros(5)
+mini_batch_step_losses = torch.zeros(5).to(device)  
 total_images_processed = 0
 
 for x,y in zip(X, y):
@@ -238,6 +233,7 @@ for x,y in zip(X, y):
             ell = loss_fn(model(x), y)
             
         mini_batch_step_losses[k] += ell.item()
+    total_images_processed += 1
 
 avg_step_losses = mini_batch_step_losses / total_images_processed
 # Plot the loss on the perturbed images as a function of the number of steps 
